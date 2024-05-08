@@ -37,6 +37,11 @@ object type_system {
     }
   }
 
+  def sourceAndCloseFixed[R]: (BufferedSource => R) => R =
+    ensureClose[BufferedSource, R](source)(_.close())
+
+
+
 //  val r1: List[String] = ensureClose(source)(_.close())(s => s.getLines().toList)
 //  val r2: String = ensureClose(source)(_.close()){s =>
 //    s.mkString(",")
