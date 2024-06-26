@@ -4,6 +4,8 @@ import ru.otus.module1.threads.{Thread1, getRatesLocation1, getRatesLocation2, g
 import ru.otus.module2.implicits.{implicit_conversions, implicit_scopes}
 import ru.otus.module3.functional_effects.declarativeEncoding
 import ru.otus.module3.functional_effects.functionalProgram.executableEncoding
+import ru.otus.module3.{toyModel, zioConstructors}
+import zio.{ExitCode, IO, UIO, URIO}
 
 object App {
 
@@ -56,6 +58,15 @@ object App {
 //    Thread.sleep(4000)
 
    // implicit_scopes
-    declarativeEncoding.interpret(declarativeEncoding.greet2)
+   // declarativeEncoding.interpret(declarativeEncoding.greet2)
+   // toyModel.echo.run()
+
+    val r: UIO[Unit] = zioConstructors.z12.provide("Hello world")
+    zio.Runtime.default.unsafeRun(r)
   }
+}
+
+object ZIOApp extends zio.App{
+  override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] =
+    zioConstructors.z2.exitCode
 }
