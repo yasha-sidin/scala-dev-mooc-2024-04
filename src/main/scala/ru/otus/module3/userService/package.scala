@@ -29,7 +29,7 @@ package object userService {
 
      class ServiceImpl(userDAO: UserDAO.Service) extends Service{
        override def notifyUser(id: UserID): RIO[EmailService with Console, Unit] = for{
-         user <- userDAO.findBy(UserID(10)).some
+         user <- userDAO.findBy(UserID(1)).some
            .orElseFail(new Throwable(s"User not found - ${id.id}"))
          email = Email(user.email, Html("Hello here"))
          _ <- EmailService.sendMail(email)
