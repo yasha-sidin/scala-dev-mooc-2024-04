@@ -1,7 +1,14 @@
 package ru.otus.module3.catsconcurrency.cats_effect_homework
 
-import cats.effect.{IO, IOApp}
+import cats.effect.kernel.Ref
+import cats.effect.unsafe.IORuntime
+import cats.effect.{Deferred, IO, IOApp, Resource}
 import cats.implicits._
+
+import scala.concurrent.duration._
+import catsconcurrency.MainCatsConcurrent.Environment
+
+import scala.language.postfixOps
 
 // Поиграемся с кошельками на файлах и файберами.
 
@@ -17,14 +24,41 @@ import cats.implicits._
 // Подсказка: чтобы сделать бесконечный цикл на IO достаточно сделать рекурсивный вызов через flatMap:
 // def loop(): IO[Unit] = IO.println("hello").flatMap(_ => loop())
 object WalletFibersApp extends IOApp.Simple {
+  final case class Environment(startWork: Deferred[IO, Unit])
 
-  def run: IO[Unit] =
-    for {
-      _ <- IO.println("Press any key to stop...")
-      wallet1 <- Wallet.fileWallet[IO]("1")
-      wallet2 <- Wallet.fileWallet[IO]("2")
-      wallet3 <- Wallet.fileWallet[IO]("3")
-      // todo: запустить все файберы и ждать ввода от пользователя чтобы завершить работу
-    } yield ()
+  def buildEnv: Resource[IO, Environment] =
+    Resource.make(
+      IO.println("Start deferred...") *> Deferred[IO, Unit]
+    )(_ => IO.println("...Stop deferred")).map(deferred => Environment(deferred))
 
+  def program(env: Environment): IO[Unit] = for {
+    _ <- IO.println("Press any key to stop...")
+    wallet1 <- Wallet.fileWallet[IO]("1")
+    wallet2 <- Wallet.fileWallet[IO]("2")
+    wallet3 <- Wallet.fileWallet[IO]("3")
+    fiber1 = IO.println("Fiber1 is ready.") *> env.startWork.get *>
+      IO.println("Fiber1 is started.") *> (wallet1.topup(100.0) *> IO.sleep(100 millisecond)).foreverM
+    _ <- fiber1.start
+    fiber2 = IO.println("Fiber2 is ready.") *> env.startWork.get *>
+      IO.println("Fiber2 is started.") *> (wallet2.topup(100.0) *> IO.sleep(500 millisecond)).foreverM
+    _ <- fiber2.start
+    fiber3 = IO.println("Fiber3 is ready.") *> env.startWork.get *>
+      IO.println("Fiber3 is started.") *> (wallet3.topup(100.0) *> IO.sleep(2000 millisecond)).foreverM
+    _ <- fiber3.start
+    fiber4 = IO.println("Fiber4(reading) is ready.") *> env.startWork.get *>
+      IO.println("Fiber4(reading) is started.") *>
+      (IO.sleep(1000 millisecond) *> wallet1.balance.flatMap(balance => IO.println(s"Wallet1: $balance")) *>
+      wallet2.balance.flatMap(balance => IO.println(s"Wallet2: $balance")) *>
+      wallet3.balance.flatMap(balance => IO.println(s"Wallet3: $balance"))).foreverM
+    _ <- fiber4.start
+    _ <- env.startWork.complete()
+    _ <- IO.readLine
+    _ <- IO.delay {
+      IORuntime.global.shutdown
+    }
+  } yield ()
+
+  def run: IO[Unit] = buildEnv.use { env =>
+    program(env)
+  }
 }
