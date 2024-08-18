@@ -7,7 +7,7 @@ import zio.{IO, Layer, ZIO}
 
 
 package object config {
-   case class AppConfig(host: String, port: String)
+  case class AppConfig(host: String, port: String)
 
   import zio.config.magnolia.DeriveConfigDescriptor.descriptor
 

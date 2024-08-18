@@ -1,11 +1,18 @@
 package ru.otus.module3
 
-import zio.{RIO, ZIO}
+import ru.otus.module3.zio_homework.EffectRunningTimeService.Service
+import ru.otus.module3.zio_homework.config.AppConfig
+import zio.clock.Clock
+import zio.{Has, RIO, UIO, ULayer, ZIO, ZLayer}
 
 import scala.language.postfixOps
 import zio.console._
 import zio.random._
+import zio.duration._
+import zio.macros.accessible
 
+import java.io.IOException
+import scala.annotation.tailrec
 import scala.io.StdIn
 
 package object zio_homework {
@@ -16,7 +23,7 @@ package object zio_homework {
    */
 
 
-  def inputNumberEffect(start: Int, end: Int): ZIO[Console, Throwable, Int] = for {
+  private def inputNumberEffect(start: Int, end: Int): ZIO[Console, Throwable, Int] = for {
     _ <- putStr("Введите число: ")
     numberString <- ZIO.effect(StdIn.readLine())
     number <- ZIO.effect(numberString.toInt).orElse(
@@ -46,10 +53,9 @@ package object zio_homework {
    *
    */
 
-  def doWhile[R, E, A](effect: ZIO[R, E, A], op: A => A, expr: A => Boolean): ZIO[R, E, A] = {
+  def doWhile[R, E, A](effect: ZIO[R, E, A], expr: A => Boolean): ZIO[R, E, Unit] = {
     effect.flatMap(res => {
-      val newRes = op(res)
-      if(expr(newRes)) effect.as(newRes) else doWhile(effect.as(newRes), op, expr)
+      doWhile(effect, expr).unless(expr(res))
     })
   }
 
@@ -61,7 +67,13 @@ package object zio_homework {
    */
 
 
-  def loadConfigOrDefault = ???
+  private def defaultConfig: UIO[AppConfig] = ZIO.succeed(AppConfig("localhost", "5000"))
+
+  def loadConfigOrDefault: ZIO[Console, IOException, Unit] =
+    config
+      .load
+      .orElse(defaultConfig)
+      .flatMap(config => putStrLn(config.toString))
 
 
   /**
@@ -75,12 +87,24 @@ package object zio_homework {
    * 4.1 Создайте эффект, который будет возвращать случайеым образом выбранное число от 0 до 10 спустя 1 секунду
    * Используйте сервис zio Random
    */
-  lazy val eff = ???
+  lazy val eff: RIO[Random with Clock, Int] = nextIntBetween(0, 11).delay(1 second)
 
   /**
    * 4.2 Создайте коллукцию из 10 выше описанных эффектов (eff)
    */
-  lazy val effects = ???
+  private def fillListEqualsObjects[A](unit: A, count: Int): List[A] = {
+    @tailrec
+    def helperDef[B](unit: B, count: Int, list: List[B]): List[B] = {
+      count match {
+        case x if x <= 0 => list
+        case _ => helperDef(unit, count - 1, unit :: list)
+      }
+    }
+
+    helperDef(unit, count, Nil)
+  }
+
+  lazy val effects: List[RIO[Random with Clock, Int]] = fillListEqualsObjects(eff, 10)
 
 
   /**
@@ -89,14 +113,33 @@ package object zio_homework {
    * можно использовать ф-цию printEffectRunningTime, которую мы разработали на занятиях
    */
 
-  lazy val app = ???
+  def printEffectRunningTime[R, E, A](effect: ZIO[R, E, A]): ZIO[Console with R, E, A] = for {
+    start <- putStrLn("Start...").as(System.currentTimeMillis()).orDie
+    r <- effect
+    end <- putStrLn("...End").as(System.currentTimeMillis()).orDie
+    res <- ZIO.succeed((end - start) / 1000)
+    _ <- putStrLn(s"Duration: $res second(s)").orDie
+  } yield r
+
+
+  lazy val app: ZIO[Console with Random with Clock, Any, Unit] = printEffectRunningTime {
+    for {
+      sum <- ZIO.mergeAll(effects)(0)((previous, next) => previous + next)
+      _ <- putStrLn(s"Sum: $sum")
+    } yield ()
+  }
 
 
   /**
    * 4.4 Усовершенствуйте программу 4.3 так, чтобы минимизировать время ее выполнения
    */
 
-  lazy val appSpeedUp = ???
+  lazy val appSpeedUp: ZIO[Console with Random with Clock, Any, Unit] = printEffectRunningTime {
+    for {
+      sum <- ZIO.mergeAllPar(effects)(0)((previous, next) => previous + next)
+      _ <- putStrLn(s"Sum: $sum")
+    } yield ()
+  }
 
 
   /**
@@ -104,6 +147,25 @@ package object zio_homework {
    * можно было использовать аналогично zio.console.putStrLn например
    */
 
+  type EffectRunningTimeService = Has[Service]
+
+  object EffectRunningTimeService {
+    trait Service {
+      def printEffectRunningTime[R, E, A](zio: ZIO[R, E, A]): ZIO[R with Clock with Console, E, A]
+    }
+
+    class ServiceImpl extends Service {
+      override def printEffectRunningTime[R, E, A](zio: ZIO[R, E, A]): ZIO[R with Clock with Console, E, A] =
+        zioConcurrency.printEffectRunningTime(zio)
+    }
+
+    val live: ULayer[EffectRunningTimeService] = ZLayer.succeed(new ServiceImpl)
+
+    def printEffectRunningTime[R, E, A](
+                                         zio: ZIO[R, E, A]
+                                       ): ZIO[EffectRunningTimeService with R with Clock with Console, E, A] =
+      ZIO.accessM(_.get.printEffectRunningTime(zio))
+  }
 
   /**
    * 6.
@@ -112,13 +174,15 @@ package object zio_homework {
    *
    */
 
-  lazy val appWithTimeLogg = ???
+  lazy val appWithTimeLogg: ZIO[EffectRunningTimeService with Console with Random with Clock, Any, Unit] =
+    EffectRunningTimeService.printEffectRunningTime(app)
 
   /**
    *
    * Подготовьте его к запуску и затем запустите воспользовавшись ZioHomeWorkApp
    */
 
-  lazy val runApp = ???
+  lazy val runApp: ZIO[Console with Random with Clock, Any, Unit] =
+    appWithTimeLogg.provideSomeLayer[Console with Random with Clock](EffectRunningTimeService.live)
 
 }
