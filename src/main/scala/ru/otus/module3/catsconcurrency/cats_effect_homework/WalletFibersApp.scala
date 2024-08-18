@@ -1,12 +1,9 @@
 package ru.otus.module3.catsconcurrency.cats_effect_homework
 
-import cats.effect.kernel.Ref
-import cats.effect.unsafe.IORuntime
 import cats.effect.{Deferred, IO, IOApp, Resource}
 import cats.implicits._
 
 import scala.concurrent.duration._
-import catsconcurrency.MainCatsConcurrent.Environment
 
 import scala.language.postfixOps
 
@@ -38,24 +35,25 @@ object WalletFibersApp extends IOApp.Simple {
     wallet3 <- Wallet.fileWallet[IO]("3")
     fiber1 = IO.println("Fiber1 is ready.") *> env.startWork.get *>
       IO.println("Fiber1 is started.") *> (wallet1.topup(100.0) *> IO.sleep(100 millisecond)).foreverM
-    _ <- fiber1.start
+    f1 <- fiber1.onCancel(IO.println("Fiber1 has been stopped")).start
     fiber2 = IO.println("Fiber2 is ready.") *> env.startWork.get *>
       IO.println("Fiber2 is started.") *> (wallet2.topup(100.0) *> IO.sleep(500 millisecond)).foreverM
-    _ <- fiber2.start
+    f2 <- fiber2.onCancel(IO.println("Fiber2 has been stopped")).start
     fiber3 = IO.println("Fiber3 is ready.") *> env.startWork.get *>
       IO.println("Fiber3 is started.") *> (wallet3.topup(100.0) *> IO.sleep(2000 millisecond)).foreverM
-    _ <- fiber3.start
+    f3 <- fiber3.onCancel(IO.println("Fiber3 has been stopped")).start
     fiber4 = IO.println("Fiber4(reading) is ready.") *> env.startWork.get *>
       IO.println("Fiber4(reading) is started.") *>
       (IO.sleep(1000 millisecond) *> wallet1.balance.flatMap(balance => IO.println(s"Wallet1: $balance")) *>
       wallet2.balance.flatMap(balance => IO.println(s"Wallet2: $balance")) *>
       wallet3.balance.flatMap(balance => IO.println(s"Wallet3: $balance"))).foreverM
-    _ <- fiber4.start
+    f4 <- fiber4.onCancel(IO.println("Fiber4 has been stopped")).start
     _ <- env.startWork.complete()
     _ <- IO.readLine
-    _ <- IO.delay {
-      IORuntime.global.shutdown
-    }
+    _ <- f1.cancel
+    _ <- f2.cancel
+    _ <- f3.cancel
+    _ <- f4.cancel
   } yield ()
 
   def run: IO[Unit] = buildEnv.use { env =>
