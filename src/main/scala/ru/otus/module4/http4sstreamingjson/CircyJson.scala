@@ -100,6 +100,7 @@ object Http4sStreamExampleFromClient extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     //todo run web server
+    ???
   }
 }
 
@@ -114,5 +115,6 @@ object Http4sStreamExampleToClient extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     //todo run web server
+    ???
   }
 }
