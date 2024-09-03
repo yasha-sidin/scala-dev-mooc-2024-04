@@ -1,8 +1,8 @@
 package ru.otus.module3.catsconcurrency.cats_effect_homework
 
 import cats.Monad
-import cats.effect.kernel.Ref
-import cats.effect.{IO, IOApp}
+import cats.effect.kernel.{Ref, Sync}
+import cats.effect.{IO, IOApp, Resource}
 import cats.implicits._
 import Wallet.{BalanceTooLow, WalletError}
 
@@ -18,23 +18,31 @@ import Wallet.{BalanceTooLow, WalletError}
 object WalletTransferApp extends IOApp.Simple {
 
   // функция, которую мы тестируем. Здесь менять ничего не нужно :)
-  def transfer[F[_]: Monad](a: Wallet[F],
-                            b: Wallet[F],
-                            amount: BigDecimal): F[Unit] =
+  def transfer[F[_] : Monad](a: Wallet[F],
+                             b: Wallet[F],
+                             amount: BigDecimal): F[Unit] =
     a.withdraw(amount).flatMap {
       case Left(BalanceTooLow) => a.topup(amount)
-      case Right(_)            => b.topup(amount)
+      case Right(_) => b.topup(amount)
     }
 
   // todo: реализовать интерпретатор (не забывая про ошибку списания при недостаточных средствах)
   final class InMemWallet[F[_]](ref: Ref[F, BigDecimal]) extends Wallet[F] {
-    def balance: F[BigDecimal] = ???
-    def topup(amount: BigDecimal): F[Unit] = ???
-    def withdraw(amount: BigDecimal): F[Either[WalletError, Unit]] = ???
+    def balance: F[BigDecimal] = ref.get
+
+    def topup(amount: BigDecimal): F[Unit] = ref.update(bal => bal + amount)
+
+    def withdraw(amount: BigDecimal): F[Either[WalletError, Unit]] = ref.modify(bal => {
+      if (bal - amount >= 0) (bal - amount, Right())
+      else (bal, Left(BalanceTooLow))
+    })
   }
 
   // todo: реализовать конструктор. Снова хитрая сигнатура, потому что создание Ref - это побочный эффект
-  def wallet(balance: BigDecimal): IO[Wallet[IO]] = ???
+  def wallet(balance: BigDecimal): IO[Wallet[IO]] =
+    Resource
+      .make(Ref.of[IO, BigDecimal](balance))(_ => IO.delay())
+      .use(ref => IO.delay(new InMemWallet[IO](ref)))
 
   // а это тест, который выполняет перевод с одного кошелька на другой и выводит балансы после операции. Тоже менять не нужно
   def testTransfer: IO[(BigDecimal, BigDecimal)] =
