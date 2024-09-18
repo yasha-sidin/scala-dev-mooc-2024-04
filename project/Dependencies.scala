@@ -9,6 +9,7 @@ object Dependencies {
   lazy val PostgresVersion = "42.3.1"
   lazy val LogbackVersion = "1.2.3"
   lazy val CirceVersion = "0.14.2"
+  lazy val CassandraVersion  = "1.0.5"
 
 
   lazy val kindProjector =
@@ -95,7 +96,9 @@ object Dependencies {
 
     "ch.qos.logback" % "logback-classic" % "1.2.3",
     "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
-    "org.scalatest" %% "scalatest" % "3.1.0" % Test
+    "org.scalatest" %% "scalatest" % "3.1.0" % Test,
+    "com.typesafe.akka" %% "akka-persistence-cassandra"          % CassandraVersion,
+    "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % CassandraVersion
   )
 
 }
