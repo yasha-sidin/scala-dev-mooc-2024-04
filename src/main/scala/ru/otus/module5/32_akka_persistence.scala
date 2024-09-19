@@ -61,10 +61,21 @@ object AccountApp{
   def main(args: Array[String]): Unit = {
     implicit val system: ActorSystem[Account.AccountCommand] = ActorSystem(Account(), "Account")
 
-    system ! Account.Credit(200)
+//    system ! Account.Credit(200)
     system ! Account.Debit(100)
     system ! Account.Debit(100)
     Thread.sleep(2000)
     system.terminate()
   }
+
+  class Counter{
+    var counter: Int = 0
+
+    def updateAndGetCounter(): Int = {
+      counter += counter + 1
+      counter
+    }
+  }
+
+
 }
