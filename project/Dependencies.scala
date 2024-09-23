@@ -74,7 +74,7 @@ object Dependencies {
     "org.http4s" %% "http4s-circe" % "0.23.14"
   )
 
-  lazy val akkaVersion = "2.8.3"
+  lazy val akkaVersion = "2.9.5"
   lazy val leveldbVersion = "0.7"
   lazy val leveldbjniVersion = "1.8"
   lazy val akkaContainers = Seq(
@@ -88,6 +88,9 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
     "com.typesafe.akka" %% "akka-testkit" % akkaVersion,
     "com.typesafe.akka" %% "akka-remote" % akkaVersion,
+    "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion,
+    "com.lightbend.akka" %% "akka-projection-eventsourced" % "1.5.4",
+    "com.lightbend.akka" %% "akka-projection-slick" % "1.5.4",
     "io.aeron" % "aeron-driver" % "1.40.0",
     "io.aeron" % "aeron-client" % "1.40.0",
 
