@@ -12,12 +12,17 @@ import akka.stream.scaladsl.{Sink, Source}
 import ru.otus.module5.Product.{AddProduct, ChangeTitle, Command, Event, RemoveProduct}
 import ru.otus.module5.simpleActors.Supervisor
 import akka.actor.typed.scaladsl.AskPattern._
+import akka.cluster.sharding.typed.ShardingEnvelope
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityRef, EntityTypeKey, ShardedDaemonProcess}
+import akka.cluster.typed.{ClusterSingleton, SingletonActor}
 import akka.projection.{ProjectionBehavior, ProjectionId, eventsourced}
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.scaladsl.{AtLeastOnceProjection, SourceProvider}
 import akka.projection.slick.{SlickHandler, SlickProjection}
 import akka.util.Timeout
+import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.{Logger, LoggerFactory}
+import ru.otus.module5
 import slick.basic.DatabaseConfig
 import slick.dbio.{DBIO, Effect => dbEffect}
 import slick.jdbc.PostgresProfile
@@ -189,8 +194,8 @@ class ProductProjection(dbConfig: DatabaseConfig[PostgresProfile],
     EventSourcedProvider
     .eventsByTag[Product.Event](system, CassandraReadJournal.Identifier, ProductTags.ProductAdded)
 
-  val projection = SlickProjection.exactlyOnce(
-    projectionId = ProjectionId("product", "1"),
+  def projection(tag: String) = SlickProjection.exactlyOnce(
+    projectionId = ProjectionId("product", tag),
     sourceProvider,
     dbConfig,
     handler
@@ -222,29 +227,26 @@ object ProductApp{
     implicit val ec = system.executionContext
     implicit val timeout = Timeout(1 seconds)
     val logger: Logger = system.log
-    val productRef: Future[ActorRef[Command]] = system.ask[ActorRef[Product.Command]](SpawnProtocol.Spawn[Product.Command](Product(Product.persistenceId), "Product", Props.empty, _))
-//    productRef.foreach{ ref =>
-//      ref ! Product.AddProduct(1, "product 1")
-//      ref ! Product.AddProduct(2, "product 2")
-//      ref ! Product.AddProduct(3, "product 3")
-//      ref ! Product.ChangeTitle(2, "product 2.1")
-//    }
-//    val readProductJournalExample = new ReadProductJournalExample(system)
     val dbConfig: DatabaseConfig[PostgresProfile] =
       DatabaseConfig.forConfig("akka.projection.slick", system.settings.config)
     val productRepository = new ProductRepository(dbConfig)
     val productProjection = new ProductProjection(dbConfig, productRepository, logger)
+    val ProductReadTypeKey = EntityTypeKey[ProjectionBehavior.Command]("Product")
+    val tags = Vector.tabulate(5)(i => s"product-$i")
+//    val sharding = ClusterSharding(system)
+//    sharding.init(Entity(ProductReadTypeKey)(ctx => ProjectionBehavior(productProjection.projection(ctx.entityId))))
+    ShardedDaemonProcess(system).init[ProjectionBehavior.Command](
+      name = "product",
+      numberOfInstances = tags.size,
+      behaviorFactory = (i: Int) => ProjectionBehavior(productProjection.projection(tags(i))),
+      stopMessage = ProjectionBehavior.Stop
+    )
 
-    val projectionActor = Behaviors.setup[String]{ ctx =>
-      ctx.spawn(ProjectionBehavior(productProjection.projection), productProjection.projection.projectionId.id)
-      Behaviors.empty
-    }
+    Thread.sleep(5000)
+    val singleton = ClusterSingleton(system)
+    val shardWrite = singleton.init(SingletonActor(Product(Product.persistenceId), "Product"))
+    //shardWrite ! AddProduct(9, "product 9")
 
-    system.ask[ActorRef[String]](SpawnProtocol.Spawn(projectionActor, "ProductProjection", Props.empty, _))
-    Thread.sleep(1000)
-//    readProductJournalExample.streamByTag(ProductTags.TitleChanged).run()
-
-//    productRepository.getById(1).foreach(println)
 
   }
 }
