@@ -41,10 +41,12 @@ object UserService {
     }
 
     def addUserWithRole(user: User, roleCode: RoleCode): RIO[db.DataSource, UserDTO] = for {
+      roleOpt <- userRepo.findRoleByCode(roleCode)
+      role <- if (roleOpt.isEmpty) userRepo.insertRole(Role(roleCode.code, roleCode.code.capitalize)) else ZIO.succeed(roleOpt.get)
       userCreated <- dc.transaction(
         for {
           userCreated <- userRepo.createUser(user)
-          _ <- userRepo.insertRoleToUser(roleCode, user.typedId)
+          _ <- userRepo.insertRoleToUser(RoleCode(role.code), user.typedId)
         } yield userCreated
       )
       roles <- userRepo.userRoles(userCreated.typedId)

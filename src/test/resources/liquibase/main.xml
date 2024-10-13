@@ -42,11 +42,6 @@
                 <constraints nullable="false"/>
             </column>
         </createTable>
-        <addForeignKeyConstraint baseColumnNames="roleId"
-                                 baseTableName="user_to_role"
-                                 constraintName="fk_user_to_role_roleId_role_id"
-                                 referencedColumnNames="code"
-                                 referencedTableName="role"/>
         <addForeignKeyConstraint baseColumnNames="userId"
                                  baseTableName="user_to_role"
                                  constraintName="fk_user_to_role_userId_user_table_id"

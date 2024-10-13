@@ -33,6 +33,8 @@ object UserRepository {
 
     def insertRoleToUser(roleCode: RoleCode, userId: UserId): QIO[Unit]
 
+    def insertRole(role: Role): QIO[Role]
+
     def listUsersWithRole(roleCode: RoleCode): QIO[List[User]]
 
     def findRoleByCode(roleCode: RoleCode): QIO[Option[Role]]
@@ -129,6 +131,12 @@ object UserRepository {
         )
         .map(_.headOption)
 
+    override def insertRole(role: Role): QIO[Role] =
+      dc.run(
+        quote(
+          roleSchema.insert(lift(role))
+        )
+      ).as(role)
   }
 
   val live: ULayer[UserRepository] = ZLayer.succeed(new ServiceImpl)
