@@ -9,9 +9,7 @@ import zio.RIO
 import zio.Task
 import zio.ZManaged
 import liquibase.Liquibase
-import liquibase.resource.FileSystemResourceAccessor
-import liquibase.resource.ClassLoaderResourceAccessor
-import liquibase.resource.CompositeResourceAccessor
+import liquibase.resource.{ClassLoaderResourceAccessor, CompositeResourceAccessor, FileSystemResourceAccessor, SearchPathResourceAccessor}
 import liquibase.database.jvm.JdbcConnection
 import module4.DBTransactor.DataSource
 import zio.{ULayer, ZLayer}
@@ -45,12 +43,12 @@ object LiquibaseService {
 
   def mkLiquibase(): ZManaged[DataSource, Throwable, Liquibase] = for {
     ds <- ZIO.environment[DataSource].map(_.get).toManaged_
-    fileAccessor <-  ZIO.effect(new FileSystemResourceAccessor()).toManaged_
+    fileAccessor <-  ZIO.effect(new SearchPathResourceAccessor("C:\\Learning\\Main\\Otus\\Scala\\Course\\ScalaRepository\\scala-dev-mooc-2024-04\\src\\test\\resources\\liquibase")).toManaged_
     classLoader <- ZIO.effect(classOf[LiquibaseService].getClassLoader).toManaged_
     classLoaderAccessor <- ZIO.effect(new ClassLoaderResourceAccessor(classLoader)).toManaged_
     fileOpener <- ZIO.effect(new CompositeResourceAccessor(fileAccessor, classLoaderAccessor)).toManaged_
     jdbcConn <- ZManaged.makeEffect(new JdbcConnection(ds.getConnection()))(c => c.close())
-    liqui <- ZIO.effect(new Liquibase("src/test/resources/liquibase/main.xml", fileOpener, jdbcConn)).toManaged_
+    liqui <- ZIO.effect(new Liquibase("main.xml", fileOpener, jdbcConn)).toManaged_
   } yield liqui
 
 

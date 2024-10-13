@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
+
+    <changeSet id="create user table" author="avoronets">
+        <createTable tableName="user_table">
+            <column name="id" type="text">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="firstName" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lastName" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="age" type="number">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="create role table" author="avoronets">
+        <createTable tableName="role">
+            <column name="code" type="text">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="text">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="create user_to_role table" author="avoronets">
+        <createTable tableName="user_to_role">
+            <column name="roleId" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="userId" type="text">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseColumnNames="roleId"
+                                 baseTableName="user_to_role"
+                                 constraintName="fk_user_to_role_roleId_role_id"
+                                 referencedColumnNames="code"
+                                 referencedTableName="role"/>
+        <addForeignKeyConstraint baseColumnNames="userId"
+                                 baseTableName="user_to_role"
+                                 constraintName="fk_user_to_role_userId_user_table_id"
+                                 referencedColumnNames="id"
+                                 referencedTableName="user_table"/>
+    </changeSet>
+
+</databaseChangeLog>
