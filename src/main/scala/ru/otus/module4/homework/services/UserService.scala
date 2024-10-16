@@ -3,40 +3,73 @@ package ru.otus.module4.homework.services
 import ru.otus.module4.homework.dao.entity.{Role, RoleCode, User}
 import ru.otus.module4.homework.dao.repository.UserRepository
 import ru.otus.module4.phoneBook.db
-import zio.Has
-import zio.RIO
-import zio.ZLayer
+import zio.{Has, RIO, ZIO, ZLayer}
 import zio.macros.accessible
 
 @accessible
-object UserService{
-    type UserService = Has[Service]
+object UserService {
+  type UserService = Has[Service]
 
-    trait Service{
-        def listUsers(): RIO[db.DataSource, List[User]]
-        def listUsersDTO(): RIO[db.DataSource, List[UserDTO]]
-        def addUserWithRole(user: User, roleCode: RoleCode): RIO[db.DataSource, UserDTO]
-        def listUsersWithRole(roleCode: RoleCode): RIO[db.DataSource, List[UserDTO]]
+  trait Service {
+    def listUsers(): RIO[db.DataSource, List[User]]
+
+    def listUsersDTO(): RIO[db.DataSource, List[UserDTO]]
+
+    def addUserWithRole(user: User, roleCode: RoleCode): RIO[db.DataSource, UserDTO]
+
+    def listUsersWithRole(roleCode: RoleCode): RIO[db.DataSource, List[UserDTO]]
+  }
+
+  class Impl(userRepo: UserRepository.Service) extends Service {
+    val dc: db.Ctx.type = db.Ctx
+
+    import dc._
+
+    def listUsers(): RIO[db.DataSource, List[User]] =
+      userRepo.list()
+
+
+    def listUsersDTO(): RIO[db.DataSource, List[UserDTO]] = {
+      userRepo
+        .list()
+        .flatMap { users =>
+          ZIO.foreach(users) {
+            user =>
+              userRepo.userRoles(user.typedId).map(roles => UserDTO(user, roles.toSet))
+          }
+        }
     }
 
-    class Impl(userRepo: UserRepository.Service) extends Service{
-        val dc = db.Ctx
-        import dc._
+    def addUserWithRole(user: User, roleCode: RoleCode): RIO[db.DataSource, UserDTO] = for {
+      roleOpt <- userRepo.findRoleByCode(roleCode)
+      role <- if (roleOpt.isEmpty) userRepo.insertRole(Role(roleCode.code, roleCode.code.capitalize)) else ZIO.succeed(roleOpt.get)
+      userCreated <- dc.transaction(
+        for {
+          userCreated <- userRepo.createUser(user)
+          _ <- userRepo.insertRoleToUser(RoleCode(role.code), user.typedId)
+        } yield userCreated
+      )
+      roles <- userRepo.userRoles(userCreated.typedId)
+    } yield UserDTO(userCreated, roles.toSet)
 
-        def listUsers(): RIO[db.DataSource, List[User]] =
-        userRepo.list()
-
-
-        def listUsersDTO(): RIO[db.DataSource,List[UserDTO]] = ???
-        
-        def addUserWithRole(user: User, roleCode: RoleCode): RIO[db.DataSource, UserDTO] = ???
-        
-        def listUsersWithRole(roleCode: RoleCode): RIO[db.DataSource,List[UserDTO]] = ???
-        
-        
+    def listUsersWithRole(roleCode: RoleCode): RIO[db.DataSource, List[UserDTO]] = {
+      val users = for {
+        usersWithRole <- userRepo.listUsersWithRole(roleCode)
+      } yield usersWithRole
+      users
+        .flatMap { users =>
+          ZIO.foreach(users) {
+            user =>
+              userRepo.userRoles(user.typedId).map(roles => UserDTO(user, roles.toSet))
+          }
+        }
     }
+  }
 
-    val live: ZLayer[UserRepository.UserRepository, Nothing, UserService] = ???
+  val live: ZLayer[UserRepository.UserRepository, Nothing, UserService] =
+    ZLayer.fromService[UserRepository.Service, UserService.Service](repo =>
+      new Impl(repo)
+    )
 }
 
 case class UserDTO(user: User, roles: Set[Role])

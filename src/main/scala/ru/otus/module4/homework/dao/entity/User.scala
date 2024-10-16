@@ -7,7 +7,7 @@ case class User(
     firstName: String,
     lastName: String,
     age: Int
-){
+) {
     def typedId: UserId = UserId(id)
 }
 

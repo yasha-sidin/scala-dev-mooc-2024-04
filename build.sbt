@@ -7,6 +7,10 @@ version := "1.0"
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven")
 
+libraryDependencies ++= Seq(
+  "org.liquibase.ext" % "liquibase-postgresql" % "4.29.2"
+)
+
 libraryDependencies += Dependencies.scalaTest
 libraryDependencies ++= Dependencies.cats
 libraryDependencies ++= Dependencies.zio
